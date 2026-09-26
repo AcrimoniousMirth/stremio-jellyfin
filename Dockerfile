@@ -10,6 +10,12 @@ ENV JELLYFIN_PASSWORD ""
 ENV SERVER_PORT 60421
 ENV JELLYFIN_SERVER "http://localhost:8096"
 
+# Library filtering (comma-separated, case-insensitive)
+# Whitelist — only expose these libraries (leave empty to expose all)
+ENV JELLYFIN_LIBRARIES ""
+# Blacklist — expose all except these (ignored if JELLYFIN_LIBRARIES is set)
+ENV JELLYFIN_EXCLUDE_LIBRARIES ""
+
 RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
 WORKDIR /home/node/app
 

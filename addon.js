@@ -2,10 +2,43 @@
 
 import {addonBuilder} from "stremio-addon-sdk"
 import {JellyfinApi, server} from "./jellyfin.js";
-import {manifest} from "./manifest.js";
+import {buildManifest} from "./manifest.js";
+
+// --- Startup: authenticate, discover libraries, build manifest ---
 
 const jellyfin = new JellyfinApi()
 await jellyfin.authenticate()
+
+const libraries = await jellyfin.getLibraries()
+
+if (libraries.length === 0) {
+    console.error("No Jellyfin libraries to expose. Exiting.")
+    process.exit(1)
+}
+
+console.log(`Exposing ${libraries.length} libraries as Stremio catalogs:`)
+libraries.forEach(lib => console.log(`  • ${lib.name} (${lib.collectionType}) → Stremio type: ${lib.stremioType}, catalog ID: ${lib.catalogId}`))
+
+// Build catalog-to-library mapping for handler routing
+const libraryMap = new Map()
+const catalogs = libraries.map(lib => {
+    libraryMap.set(lib.catalogId, lib)
+    return {
+        type: lib.stremioType,
+        id: lib.catalogId,
+        name: `Jellyfin - ${lib.name}`,
+        extra: [
+            { name: "skip", isRequired: false },
+            { name: "search", isRequired: false }
+        ]
+    }
+})
+
+const manifest = buildManifest(catalogs)
+
+// --- Addon builder & handlers ---
+
+let builder = new addonBuilder(manifest)
 
 function stringToUuid(plainStringUuid) {
     return plainStringUuid.replace(
@@ -13,8 +46,6 @@ function stringToUuid(plainStringUuid) {
         "$1-$2-$3-$4-$5"
     )
 }
-
-let builder = new addonBuilder(manifest)
 
 function itemToMeta(item) {
     const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.IMDB
@@ -27,14 +58,16 @@ function itemToMeta(item) {
 }
 
 builder.defineCatalogHandler(async ({type, id, extra}) => {
-    console.log("request for catalogs: " + type + " " + id)
+    console.log(`request for catalog: type=${type} id=${id}`)
     try {
+        const library = libraryMap.get(id)
+        const parentId = library?.id || null
         return {
-            metas: await Promise.all(await jellyfin.searchItems(extra.skip || 0, type === 'movie', extra.search))
+            metas: await Promise.all(await jellyfin.searchItems(extra.skip || 0, type === 'movie', extra.search, parentId))
                 .then(it => it.map(e => itemToMeta(e.data)))
         }
     } catch (err) {
-        console.error(`Error in catalog handler: ${err?.message}`)
+        console.error(`Error in catalog handler (${id}): ${err?.message}`)
         return {metas: []}
     }
 })

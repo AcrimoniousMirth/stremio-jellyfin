@@ -8,6 +8,12 @@ const password = process.env.JELLYFIN_PASSWORD
 const device = os.hostname()
 const itemsLimit = 20
 
+// Maps Jellyfin collection types to Stremio content types
+const COLLECTION_TYPE_MAP = {
+    'movies': 'movie',
+    'tvshows': 'series',
+}
+
 export class JellyfinApi {
 
     async authenticate() {
@@ -97,15 +103,66 @@ export class JellyfinApi {
         }
     }
 
+    /**
+     * Fetch all libraries from Jellyfin and return them mapped to Stremio catalog info.
+     * Applies whitelist (JELLYFIN_LIBRARIES) or blacklist (JELLYFIN_EXCLUDE_LIBRARIES) filtering.
+     */
+    async getLibraries() {
+        try {
+            const response = await axios.get(`${server}/Library/VirtualFolders`, {
+                headers: this.getHeaders()
+            })
+
+            const allLibraries = response.data || []
+
+            // Map to a simpler structure, filtering to video-compatible types
+            let libraries = allLibraries
+                .filter(lib => COLLECTION_TYPE_MAP[lib.CollectionType])
+                .map(lib => ({
+                    name: lib.Name,
+                    id: lib.ItemId,
+                    collectionType: lib.CollectionType,
+                    stremioType: COLLECTION_TYPE_MAP[lib.CollectionType],
+                    catalogId: `jellyfin-${lib.Name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+                }))
+
+            // Apply whitelist or blacklist
+            const includeList = process.env.JELLYFIN_LIBRARIES
+            const excludeList = process.env.JELLYFIN_EXCLUDE_LIBRARIES
+
+            if (includeList) {
+                const include = includeList.split(',').map(s => s.trim().toLowerCase())
+                libraries = libraries.filter(lib => include.includes(lib.name.toLowerCase()))
+            } else if (excludeList) {
+                const exclude = excludeList.split(',').map(s => s.trim().toLowerCase())
+                libraries = libraries.filter(lib => !exclude.includes(lib.name.toLowerCase()))
+            }
+
+            if (libraries.length === 0) {
+                console.warn("No libraries matched the filter. Check JELLYFIN_LIBRARIES / JELLYFIN_EXCLUDE_LIBRARIES settings.")
+                console.warn(`Available libraries: ${allLibraries.map(l => `${l.Name} (${l.CollectionType})`).join(', ')}`)
+            }
+
+            return libraries
+        } catch (err) {
+            console.error(`Error fetching libraries: ${err?.message}`)
+            return []
+        }
+    }
+
     async getItemById(itemId) {
         return axios.get(`${server}/Users/${this.userId}/Items/${itemId}`, {
             headers: this.getHeaders()
         })
     }
 
-    async searchItems(skip, movie, searchTerm = null) {
-        let firstItem = Number(skip) + 1
-        let itemsSearch = `${server}/Items?userId=${this.userId}&hasImdb=true&Recursive=true&startIndex=${firstItem}&limit=${itemsLimit}&sortBy=SortName&fields=ProviderIds`
+    async searchItems(skip, movie, searchTerm = null, parentId = null) {
+        let startIndex = Number(skip) || 0
+        let itemsSearch = `${server}/Items?userId=${this.userId}&hasImdb=true&Recursive=true&startIndex=${startIndex}&limit=${itemsLimit}&sortBy=SortName&fields=ProviderIds`
+
+        if (parentId) {
+            itemsSearch += `&parentId=${parentId}`
+        }
 
         if (searchTerm) {
             itemsSearch += `&searchTerm=${encodeURIComponent(searchTerm)}`
