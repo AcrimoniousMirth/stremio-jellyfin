@@ -1,6 +1,6 @@
 export const manifest = {
     "id": "community.stremiojellyfin",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "catalogs": [
         {
             "type": "movie",

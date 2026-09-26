@@ -4,39 +4,74 @@
 
 ![](assets/si.png)
 
+## What's New in v2.0
+
+- **API Key Authentication** — No more passing usernames and passwords. Generate an API key in Jellyfin Dashboard and you're set.
+- **No Plugin Required** — Removed the dependency on the `jellyfin-providersid-search-plugin`. Everything works with the native Jellyfin API.
+- **Modern Jellyfin Compatibility** — Updated from the removed `X-Emby-Authorization` header to the standard `Authorization: MediaBrowser` header (required for Jellyfin 12.0+).
+- **Username/Password Fallback** — Still works with credentials if you prefer that auth method.
+
 ## Installation
 
-This addon consists of two parts: Stremio Addon and supporting Jellyfin Extension adding Jellyfin search 
-capability using IMDB identifiers. Both components are required.
+### Jellyfin Setup
 
-### Jellyfin Stremio Companion Plugin
+1. Go to **Jellyfin > Dashboard > Advanced > API Keys**
+2. Click **+** to generate a new API key
+3. Name it something like `Stremio Addon`
+4. Copy the generated key
 
-To install [it](https://github.com/akarazniewicz/jellyfin-providersid-search-plugin), simply add following, new addon repository to Jellyfin (`Jellyfin > Dashboard > Plugins > Repositories`):
+No plugins are required.
 
-https://raw.githubusercontent.com/akarazniewicz/jellyfin-providersid-search-plugin/main/manifest.json
+### Docker (Recommended)
 
-You will have new plugin available in Jellyfin. Just activate 'Providers ID Items Search API' plugin.
+Pull the latest image:
 
-![](assets/jp.png)
+```
+docker pull ghcr.io/acrimoniousmirth/stremio-jellyfin:latest
+```
 
-### Jellyfin Stremio Addon
+#### Using API Key (Recommended)
 
-Jellyfin Stremio addon should be installed in your local docker environment. To install it pull latest docker addon image:
+```bash
+docker run -p 60421:60421 \
+  -e JELLYFIN_API_KEY="<your api key>" \
+  -e JELLYFIN_SERVER="http://<your jellyfin host>:8096" \
+  ghcr.io/acrimoniousmirth/stremio-jellyfin
+```
 
-`docker pull ghcr.io/akarazniewicz/stremio-jellyfin:latest`
+#### Using Username/Password (Fallback)
 
-and then run it:
+```bash
+docker run -p 60421:60421 \
+  -e JELLYFIN_USER="<your jellyfin username>" \
+  -e JELLYFIN_PASSWORD="<your jellyfin user password>" \
+  -e JELLYFIN_SERVER="http://<your jellyfin host>:8096" \
+  ghcr.io/acrimoniousmirth/stremio-jellyfin
+```
 
-`docker run -p 60421:60421 -e JELLYFIN_USER="<your jellyfin username>" -e JELLYFIN_PASSWORD="<your jellyfin user password>" -e JELLYFIN_SERVER="<your jellyfin server address>" ghcr.io/akarazniewicz/stremio-jellyfin"`
+### Environment Variables
 
-where:
-* `60421` - is standard port addon is running on (You may remap it in docker)
-* `<your jellyfin username>` - Jellyfin username
-* `<your jellyfin user password>` - Jellyfin password
-* `<your jellyfin server address>` - Jellyfin server address and port (`http://aaa.bbb.ccc.ddd:eee`). Make sure Jellyfin is connectable.
+| Variable | Required | Description |
+|---|---|---|
+| `JELLYFIN_SERVER` | Yes | Jellyfin server URL (e.g. `http://192.168.1.100:8096`) |
+| `JELLYFIN_API_KEY` | No* | API key from Jellyfin Dashboard > Advanced > API Keys |
+| `JELLYFIN_USER` | No* | Jellyfin username (fallback auth) |
+| `JELLYFIN_PASSWORD` | No* | Jellyfin password (fallback auth) |
+| `SERVER_PORT` | No | Addon port (default: `60421`) |
 
-You can run it in Your docker orchestrator too (like Rancher or Unraid).
+\* Either `JELLYFIN_API_KEY` or both `JELLYFIN_USER` + `JELLYFIN_PASSWORD` must be provided.
 
-Finally, add the manifest to Stremio to install this addon:
+### Running Locally
 
-`http://<your docker host>:60421/manifest.json`
+```bash
+npm install
+JELLYFIN_API_KEY="your-key" JELLYFIN_SERVER="http://localhost:8096" npm start
+```
+
+### Adding to Stremio
+
+Once the addon is running, add the manifest URL to Stremio:
+
+```
+http://<your docker host>:60421/manifest.json
+```
