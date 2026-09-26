@@ -126,16 +126,34 @@ export class JellyfinApi {
                     catalogId: `jellyfin-${lib.Name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
                 }))
 
+            // Log all discovered libraries
+            console.log(`Jellyfin returned ${allLibraries.length} libraries:`)
+            allLibraries.forEach(lib => console.log(`  • "${lib.Name}" (type: ${lib.CollectionType || '<none>'}, id: ${lib.ItemId})`))
+            console.log(`Of those, ${libraries.length} are video libraries: ${libraries.map(l => `"${l.name}"`).join(', ')}`)
+
             // Apply whitelist or blacklist
             const includeList = process.env.JELLYFIN_LIBRARIES
             const excludeList = process.env.JELLYFIN_EXCLUDE_LIBRARIES
 
             if (includeList) {
                 const include = includeList.split(',').map(s => s.trim().toLowerCase())
+                console.log(`JELLYFIN_LIBRARIES whitelist: [${include.map(s => `"${s}"`).join(', ')}]`)
                 libraries = libraries.filter(lib => include.includes(lib.name.toLowerCase()))
             } else if (excludeList) {
                 const exclude = excludeList.split(',').map(s => s.trim().toLowerCase())
+                console.log(`JELLYFIN_EXCLUDE_LIBRARIES blacklist: [${exclude.map(s => `"${s}"`).join(', ')}]`)
+                const before = libraries.map(l => l.name)
                 libraries = libraries.filter(lib => !exclude.includes(lib.name.toLowerCase()))
+                const removed = before.filter(n => !libraries.find(l => l.name === n))
+                if (removed.length > 0) {
+                    console.log(`Excluded: ${removed.map(n => `"${n}"`).join(', ')}`)
+                } else {
+                    console.warn(`No libraries were excluded! None of the blacklist entries matched the library names.`)
+                    console.warn(`Library names are: ${before.map(n => `"${n}"`).join(', ')}`)
+                    console.warn(`Blacklist entries are: ${exclude.map(s => `"${s}"`).join(', ')}`)
+                }
+            } else {
+                console.log("No library filter configured (JELLYFIN_LIBRARIES / JELLYFIN_EXCLUDE_LIBRARIES not set)")
             }
 
             if (libraries.length === 0) {
